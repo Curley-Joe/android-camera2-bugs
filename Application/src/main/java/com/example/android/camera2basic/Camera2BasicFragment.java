@@ -160,6 +160,7 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
      */
 
     private Size mPreviewSize;
+    private CameraCharacteristics mCharacteristics;
 
     /**
      * {@link CameraDevice.StateCallback} is called when {@link CameraDevice} changes its state.
@@ -471,6 +472,7 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
                 }
 
                 mCameraId = cameraId;
+                mCharacteristics = characteristics;
                 return;
             }
         } catch (CameraAccessException e) {
@@ -583,9 +585,29 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
                             // When the session is ready, we start displaying the preview.
                             mCaptureSession = cameraCaptureSession;
                             try {
-                                // Auto focus should be continuous for camera preview.
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                                float minimumLens = 0;
+                                try {
+                                    minimumLens = mCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
+                                } catch (Exception e) {
+                                    Log.w(TAG, "LENS_INFO_MINIMUM_FOCUS_DISTANCE not supported");
+                                }
+                                if (minimumLens != 0) {
+                                    float inches = dioptersToInches(minimumLens);
+                                    Log.d(TAG, "LENS_INFO_MINIMUM_FOCUS_DISTANCE is " + minimumLens + " diopters (" + inches + " inches)");
+				                    Log.d(TAG, "CONTROL_AF_MODE = CONTROL_AF_MODE_OFF");
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+                                    Log.d(TAG, "LENS_FOCUS_DISTANCE = " + minimumLens + " diopters (" + inches + " inches)");
+                                    mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, minimumLens);
+                                    showToast("LENS_FOCUS_DISTANCE = " + inches + " inches");
+                                }
+                                else {
+                                    Log.w(TAG, "Fixed focus not supported");
+                                    showToast("Fixed focus not supported");
+                                    // Auto focus should be continuous for camera preview.
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                                            CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                                }
+
                                 // Flash is automatically enabled when necessary.
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                                         CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
@@ -608,6 +630,12 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+    }
+
+    private float dioptersToInches(float diopters) {
+        double meters = 1.0 / diopters;
+        double inches  = meters / 0.0254;
+        return (float) inches;
     }
 
     /**
